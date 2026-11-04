@@ -35,20 +35,62 @@ const DESCS = [
 
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbx2wUj3WMQv8BXJE0Fne_5S4kathR9X4x2rGSO0_5KlUu6tKWFJRaBWlnnYz0kpbqP6Gw/exec";
 
+// LOCAL STORAGE KEY
+const STORAGE_KEY = "closer_progress_v1";
+
 const $ = id => document.getElementById(id);
 
+
+// LOAD SAVED DATA FROM LOCAL STORAGE
+function loadStoredSet(key) {
+    try {
+        const data = JSON.parse(
+            localStorage.getItem(STORAGE_KEY) || "{}"
+        );
+
+        if (!Array.isArray(data[key])) {
+            return new Set();
+        }
+
+        return new Set(data[key].map(id => String(id)));
+
+    } catch (error) {
+        console.error("Unable to load saved progress:", error);
+        return new Set();
+    }
+}
+
+
+// GLOBAL VARIABLES
 let allQuestions = [];
 let level = 1;
 let deck = [];
 let idx = 0;
-let explored = new Set();
-let saved = new Set();
+let explored = loadStoredSet("explored");
+let saved = loadStoredSet("saved");
 let current = null;
+
+
+// SAVE PROGRESS TO LOCAL STORAGE
+function saveProgress() {
+    try {
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                explored: [...explored],
+                saved: [...saved]
+            })
+        );
+
+    } catch (error) {
+        console.error("Unable to save progress:", error);
+    }
+}
 
 
 // GET QUESTIONS FROM GOOGLE SHEETS
 async function loadQuestions() {
-    $("levels").textContent = "Loading questions...";
+    //$("levels").textContent = "Loading questions...";
 
     try {
         const response = await fetch(SHEET_URL);
@@ -76,7 +118,24 @@ async function loadQuestions() {
             throw new Error("No questions were found in your spreadsheet.");
         }
 
+        // REMOVE SAVED IDs THAT NO LONGER EXIST IN GOOGLE SHEETS
+        const validIds = new Set(
+            allQuestions.map(q => q.id)
+        );
+
+        explored = new Set(
+            [...explored].filter(id => validIds.has(id))
+        );
+
+        saved = new Set(
+            [...saved].filter(id => validIds.has(id))
+        );
+
+        saveProgress();
+
         console.log("Questions loaded:", allQuestions.length);
+        console.log("Explored questions:", explored.size);
+        console.log("Saved questions:", saved.size);
 
         renderLevels();
         renderSaved();
@@ -102,7 +161,7 @@ function titleForLevel(n) {
 
     return question
         ? question.levelTitle
-        : TITLES[n - 1];
+        : TITLES[n - 1] || `Level ${n}`;
 }
 
 
@@ -132,27 +191,37 @@ function renderLevels() {
                 </div>
                 <div class="levmeta">
                     <span>${done} / ${list.length} explored</span>
-                    <span>Open level →</span>
+                    <span>${list.length ? "Open level →" : "Coming soon"}</span>
                 </div>
             </span>
         `;
 
+        // DISABLE LEVELS WITHOUT QUESTIONS
+        el.disabled = list.length === 0;
+
         el.onclick = () => start(n);
+
         root.appendChild(el);
     });
 
+    // OVERALL PROGRESS
+    const exploredCount = allQuestions.filter(
+        q => explored.has(q.id)
+    ).length;
+
     $("overallCount").textContent =
-        `${explored.size} / ${allQuestions.length} explored`;
+        `${exploredCount} / ${allQuestions.length} explored`;
 
     let percent = allQuestions.length
-        ? Math.round(explored.size / allQuestions.length * 100)
+        ? Math.round(exploredCount / allQuestions.length * 100)
         : 0;
 
     $("percent").textContent = percent + "%";
     $("overallFill").style.width = percent + "%";
+    $("overallFill").classList.remove("loading-bar");
 
     // UPDATE HOMEPAGE QUESTION COUNT
-    const footnote = document.getElementById("questionCount");
+    const footnote = $("questionCount");
 
     if (footnote) {
         footnote.textContent =
@@ -165,7 +234,15 @@ function renderLevels() {
 function start(n) {
     level = n;
     deck = qs(n);
-    idx = 0;
+
+    // RESUME FROM FIRST UNEXPLORED QUESTION
+    idx = deck.findIndex(q => !explored.has(q.id));
+
+    // IF EVERYTHING IS EXPLORED, SHOW COMPLETION
+    if (idx === -1) {
+        idx = deck.length;
+    }
+
     current = null;
 
     $("intro").classList.add("hidden");
@@ -178,24 +255,40 @@ function start(n) {
 
 // DISPLAY CURRENT QUESTION
 function show() {
+
+    // CHECK IF LEVEL IS COMPLETE
     if (idx >= deck.length) {
         current = null;
 
+        let completed = deck.filter(
+            q => explored.has(q.id)
+        ).length;
+
         $("question").textContent =
-            "You've explored every question in this level.";
+            completed === deck.length
+                ? "You've explored every question in this level."
+                : "You've reached the end of this level.";
 
         $("hint").textContent =
             "Return to all levels to choose another deck or revisit saved questions.";
 
         $("number").textContent = "♡";
-        $("pill").textContent = `LEVEL ${level} COMPLETE`;
+
+        $("pill").textContent =
+            `LEVEL ${level} COMPLETE`;
+
         $("round").textContent = "LEVEL COMPLETE";
-        $("progress").style.width = "100%";
+
+        $("progress").style.width =
+            deck.length
+                ? completed / deck.length * 100 + "%"
+                : "0%";
 
         $("levelProgress").textContent =
-            `${deck.filter(q => explored.has(q.id)).length} explored in this level`;
+            `${completed} / ${deck.length} explored in this level`;
 
         $("next").textContent = "Back to levels ↗";
+
         $("save").classList.add("hidden");
         $("interpretation").classList.add("hidden");
 
@@ -211,7 +304,8 @@ function show() {
             ? `Section: ${current.section}. Take turns answering. You can always pass.`
             : "Take turns answering. You can always pass.");
 
-    $("number").textContent = String(idx + 1).padStart(2, "0");
+    $("number").textContent =
+        String(idx + 1).padStart(2, "0");
 
     let typeLabel = current.type !== "standard"
         ? ` · ${current.type.toUpperCase()}`
@@ -229,11 +323,18 @@ function show() {
     $("pill").textContent =
         `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`;
 
+    // PROGRESS BASED ON ACTUALLY EXPLORED QUESTIONS
+    let completed = deck.filter(
+        q => explored.has(q.id)
+    ).length;
+
     $("progress").style.width =
-        idx / deck.length * 100 + "%";
+        deck.length
+            ? completed / deck.length * 100 + "%"
+            : "0%";
 
     $("levelProgress").textContent =
-        `${deck.filter(q => explored.has(q.id)).length} explored in this level`;
+        `${completed} / ${deck.length} explored in this level`;
 
     $("save").classList.remove("hidden");
 
@@ -241,7 +342,9 @@ function show() {
         saved.has(current.id) ? "♥" : "♡";
 
     $("next").textContent =
-        explored.has(current.id) ? "Next question →" : "Mark explored →";
+        explored.has(current.id)
+            ? "Next question →"
+            : "Mark explored →";
 
     if (current.interpretation) {
         $("interpretation").textContent = current.interpretation;
@@ -256,18 +359,18 @@ function show() {
 
 // MOVE TO NEXT QUESTION
 function advance() {
-    if (idx >= deck.length) {
-        $("game").classList.add("hidden");
-        $("intro").classList.remove("hidden");
-        renderLevels();
-        return;
-    }
-
     if (current) {
         explored.add(current.id);
+        saveProgress();
     }
 
     idx++;
+
+    // Skip questions that have already been answered
+    while (idx < deck.length && explored.has(deck[idx].id)) {
+        idx++;
+    }
+
     show();
     renderLevels();
 }
@@ -280,7 +383,9 @@ function renderSaved() {
     let root = $("savedList");
     root.innerHTML = "";
 
-    let list = allQuestions.filter(q => saved.has(q.id));
+    let list = allQuestions.filter(
+        q => saved.has(q.id)
+    );
 
     if (!list.length) {
         root.textContent =
@@ -301,19 +406,28 @@ function renderSaved() {
 
 
 // BUTTON EVENTS
+
+// NEXT QUESTION
 $("next").onclick = advance;
 
+
+// PASS QUESTION
 $("pass").onclick = () => {
     idx++;
     show();
 };
 
+
+// BACK TO LEVELS
 $("back").onclick = () => {
     $("game").classList.add("hidden");
     $("intro").classList.remove("hidden");
+
     renderLevels();
 };
 
+
+// HOME BUTTON
 $("home").onclick = e => {
     e.preventDefault();
 
@@ -323,10 +437,17 @@ $("home").onclick = e => {
     renderLevels();
 };
 
+
+// RESET ALL PROGRESS
 $("reset").onclick = () => {
+
     if (confirm("Reset all explored-question progress and saved questions?")) {
+
         explored.clear();
         saved.clear();
+
+        // CLEAR LOCAL STORAGE DATA
+        saveProgress();
 
         $("game").classList.add("hidden");
         $("intro").classList.remove("hidden");
@@ -336,7 +457,10 @@ $("reset").onclick = () => {
     }
 };
 
+
+// SAVE / UNSAVE QUESTION
 $("save").onclick = () => {
+
     if (!current) return;
 
     if (saved.has(current.id)) {
@@ -345,9 +469,14 @@ $("save").onclick = () => {
         saved.add(current.id);
     }
 
+    // SAVE CHANGES IMMEDIATELY
+    saveProgress();
+
     show();
 };
 
+
+// TOGGLE SAVED QUESTIONS PANEL
 $("savedToggle").onclick = () => {
     $("savedPanel").classList.toggle("hidden");
 };
