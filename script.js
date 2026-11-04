@@ -28,7 +28,7 @@ const DESCS = [
     "Explore physical attraction, sexual compatibility, desires, boundaries, and adult intimacy. 18+ only.",
     "Discuss whether a certain action is basic relationship effort or extra-special treatment.",
     "Explore how you express care, recognize others' needs, and adapt your love language to different people and situations.",
-    "Explore self-awareness, empathy, emotional regulation, communication, accountability, and emotional maturity."
+    "Explore self-awareness, empathy, emotional regulation, communication, accountability, and emotional maturity.",
     "Discover parts of ourselves we don't always like to acknowledge: insecurity, jealousy, selfishness, control, resentment, ego, unhealthy patterns, hidden intentions, and the ways we unintentionally hurt others.",
     "Understand self-worth, self-acceptance, confidence, personal identity, healing, independence, growth, and learning to become comfortable with who you are."
 ];
