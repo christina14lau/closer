@@ -153,7 +153,23 @@ h1 em {
     height: 100%;
     width: 0;
     background: var(--rose);
-    transition: width .25s;
+    transition: width 0.8s ease-in-out;
+}
+
+/* Loading animation */
+.loading-bar {
+    width: 35% !important;
+    animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+    0% {
+        transform: translateX(-120%);
+    }
+
+    100% {
+        transform: translateX(300%);
+    }
 }
 
 .levels {
@@ -229,6 +245,7 @@ h1 em {
 .mini div {
     height: 100%;
     background: #819BC2;
+    transition: width 0.8s ease-in-out;
 }
 
 .footnote {
