@@ -7,7 +7,8 @@ const TITLES = [
     "Personal History & Healing",
     "The Future & Deep Connection",
     "Situations & Character",
-    "The Unspoken"
+    "The Unspoken",
+    "Adult Intimacy"
 ];
 
 const DESCS = [
@@ -18,7 +19,8 @@ const DESCS = [
     "Explore formative experiences, lessons, regrets, and your story.",
     "Talk about long-term compatibility, dreams, fears, and shared life.",
     "Hypothetical scenarios to explore how someone thinks and decides.",
-    "Deeply personal questions about vulnerability, fears, and inner truths."
+    "Deeply personal questions about vulnerability, fears, and inner truths.",
+    "Explore physical attraction, sexual compatibility, desires, boundaries, and adult intimacy. 18+ only."
 ];
 
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbx2wUj3WMQv8BXJE0Fne_5S4kathR9X4x2rGSO0_5KlUu6tKWFJRaBWlnnYz0kpbqP6Gw/exec";
@@ -47,7 +49,6 @@ async function loadQuestions() {
 
         const data = await response.json();
 
-        // Prepare the question data
         allQuestions = data
             .filter(q => q.id && q.text && Number(q.level))
             .map(q => ({
@@ -72,6 +73,7 @@ async function loadQuestions() {
 
     } catch (error) {
         console.error("Error loading questions:", error);
+
         $("levels").textContent =
             "Unable to load questions. Please check your Google Sheets connection.";
     }
@@ -87,7 +89,10 @@ function qs(n) {
 // GET LEVEL TITLE FROM SHEETS
 function titleForLevel(n) {
     const question = qs(n).find(q => q.levelTitle);
-    return question ? question.levelTitle : TITLES[n - 1];
+
+    return question
+        ? question.levelTitle
+        : TITLES[n - 1];
 }
 
 
@@ -107,7 +112,10 @@ function renderLevels() {
         el.innerHTML = `
             <span class="badge">${n}</span>
             <span class="levcontent">
-                <div class="levtitle">Level ${n} — ${titleForLevel(n)}</div>
+                <div class="levtitle">
+                    Level ${n} — ${titleForLevel(n)}
+                    ${n === 9 ? '<span style="color:var(--rose);font-size:9px;"> · 18+</span>' : ''}
+                </div>
                 <div class="levdesc">${DESCS[i]}</div>
                 <div class="mini">
                     <div style="width:${list.length ? done / list.length * 100 : 0}%"></div>
@@ -132,6 +140,14 @@ function renderLevels() {
 
     $("percent").textContent = percent + "%";
     $("overallFill").style.width = percent + "%";
+
+    // UPDATE HOMEPAGE QUESTION COUNT
+    const footnote = document.getElementById("questionCount");
+
+    if (footnote) {
+        footnote.textContent =
+            `${allQuestions.length} questions · ${TITLES.length} levels`;
+    }
 }
 
 
@@ -140,6 +156,7 @@ function start(n) {
     level = n;
     deck = qs(n);
     idx = 0;
+    current = null;
 
     $("intro").classList.add("hidden");
     $("game").classList.remove("hidden");
@@ -152,6 +169,8 @@ function start(n) {
 // DISPLAY CURRENT QUESTION
 function show() {
     if (idx >= deck.length) {
+        current = null;
+
         $("question").textContent =
             "You've explored every question in this level.";
 
@@ -188,15 +207,17 @@ function show() {
         ? ` · ${current.type.toUpperCase()}`
         : "";
 
+    let adultLabel = level === 9 ? " · 18+" : "";
+
     $("round").textContent =
-        `LEVEL ${level}${typeLabel} · QUESTION ${String(idx + 1).padStart(2, "0")}`;
+        `LEVEL ${level}${typeLabel}${adultLabel} · QUESTION ${String(idx + 1).padStart(2, "0")}`;
 
     let sectionLabel = current.section
         ? ` · ${current.section}`
         : "";
 
     $("pill").textContent =
-        `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}`;
+        `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`;
 
     $("progress").style.width =
         idx / deck.length * 100 + "%";
@@ -260,7 +281,10 @@ function renderSaved() {
     list.forEach(q => {
         let d = document.createElement("div");
         d.className = "saveditem";
-        d.textContent = `Level ${q.level}: ${q.text}`;
+
+        d.textContent =
+            `Level ${q.level}: ${q.text}`;
+
         root.appendChild(d);
     });
 }
