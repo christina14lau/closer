@@ -8,7 +8,12 @@ const TITLES = [
     "The Future & Deep Connection",
     "Situations & Character",
     "The Unspoken",
-    "Adult Intimacy"
+    "Adult Intimacy",
+    "Bare Minimum or Princess Treatment",
+    "Love Language & Personality",
+    "Emotional Intelligence",
+    "Darker Side of You",
+    "Self-Love & Personal Growth"
 ];
 
 const DESCS = [
@@ -20,7 +25,12 @@ const DESCS = [
     "Talk about long-term compatibility, dreams, fears, and shared life.",
     "Hypothetical scenarios to explore how someone thinks and decides.",
     "Deeply personal questions about vulnerability, fears, and inner truths.",
-    "Explore physical attraction, sexual compatibility, desires, boundaries, and adult intimacy. 18+ only."
+    "Explore physical attraction, sexual compatibility, desires, boundaries, and adult intimacy. 18+ only.",
+    "Discuss whether a certain action is basic relationship effort or extra-special treatment.",
+    "Explore how you express care, recognize others' needs, and adapt your love language to different people and situations.",
+    "Explore self-awareness, empathy, emotional regulation, communication, accountability, and emotional maturity."
+    "Discover parts of ourselves we don't always like to acknowledge: insecurity, jealousy, selfishness, control, resentment, ego, unhealthy patterns, hidden intentions, and the ways we unintentionally hurt others.",
+    "Understand self-worth, self-acceptance, confidence, personal identity, healing, independence, growth, and learning to become comfortable with who you are."
 ];
 
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbx2wUj3WMQv8BXJE0Fne_5S4kathR9X4x2rGSO0_5KlUu6tKWFJRaBWlnnYz0kpbqP6Gw/exec";
