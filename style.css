@@ -197,6 +197,17 @@ h1 em {
     transition: .2s;
 }
 
+.level:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.level:disabled:hover {
+    transform: none;
+    border-color: var(--line);
+    background: #2D3B50;
+}
+
 .level:hover {
     transform: translateY(-2px);
     border-color: #819BC2;
