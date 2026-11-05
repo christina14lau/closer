@@ -38,7 +38,10 @@
                         <small>YOUR QUESTION DECK</small>
                         <h2>Choose a level to explore</h2>
                     </div>
-                    <span>♡</span>
+                    <button id="homeSavedToggle" class="home-save-btn" title="View saved questions">
+                        ♡
+                        <span id="homeSavedCount">0</span>
+                    </button>
                 </div>
 
                 <div class="overall">
@@ -98,12 +101,27 @@
                     ♡ Saved questions (<span id="savedCount">0</span>)
                 </button>
             </div>
-            
-            <div id="savedPanel" class="savedpanel hidden">
-                <h3>Your saved questions</h3>
-                <div id="savedList"></div>
-            </div>
+
         </section>
+        <!-- SAVED QUESTIONS MODAL -->
+        <div id="savedModal" class="saved-modal hidden">
+
+            <div class="saved-overlay"></div>
+
+            <div class="saved-modal-content">
+
+                <div class="savedpanel-head">
+                    <div>
+                        <h3>Your saved questions</h3>
+                    </div>
+
+                    <button id="closeSavedModal">✕</button>
+                </div>
+
+                <div id="savedList"></div>
+                
+            </div>
+        </div>
     </main>
     <footer>made for meaningful conversations <span>♡</span></footer>
     <script src="script.js"></script>
