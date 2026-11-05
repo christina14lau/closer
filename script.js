@@ -90,7 +90,6 @@ function saveProgress() {
 
 // GET QUESTIONS FROM GOOGLE SHEETS
 async function loadQuestions() {
-    //$("levels").textContent = "Loading questions...";
 
     try {
         const response = await fetch(SHEET_URL);
@@ -152,6 +151,7 @@ async function loadQuestions() {
         });
 
 
+        // RENDER PAGE
         renderLevels();
         renderSaved();
 
@@ -180,32 +180,52 @@ function titleForLevel(n) {
 }
 
 
+// ESCAPE HTML
+function escapeHTML(text) {
+    return String(text).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+    })[char]);
+}
+
 
 // DISPLAY LEVELS
 function renderLevels() {
+
     let root = $("levels");
     root.innerHTML = "";
 
     // CREATE ALL LEVEL CARDS
     TITLES.forEach((title, i) => {
+
         let n = i + 1;
         let list = qs(n);
-        let done = list.filter(q => explored.has(q.id)).length;
+
+        let done = list.filter(
+            q => explored.has(q.id)
+        ).length;
 
         let el = document.createElement("button");
         el.className = "level";
 
         el.innerHTML = `
             <span class="badge">${n}</span>
+
             <span class="levcontent">
                 <div class="levtitle">
                     Level ${n} — ${titleForLevel(n)}
                     ${n === 9 ? '<span style="color:var(--rose);font-size:9px;"> · 18+</span>' : ''}
                 </div>
+
                 <div class="levdesc">${DESCS[i]}</div>
+
                 <div class="mini">
                     <div style="width:${list.length ? done / list.length * 100 : 0}%"></div>
                 </div>
+
                 <div class="levmeta">
                     <span>${done} / ${list.length} explored</span>
                     <span>${list.length ? "Open level →" : "Coming soon"}</span>
@@ -222,17 +242,21 @@ function renderLevels() {
         root.appendChild(el);
     });
 
+
     // CREATE RANDOMIZER CARD AFTER ALL LEVELS
     let randomizer = document.createElement("button");
     randomizer.className = "level randomizer";
 
     randomizer.innerHTML = `
         <span class="badge">♡</span>
+
         <span class="levcontent">
             <div class="levtitle">Surprise Me</div>
+
             <div class="levdesc">
                 Get a random question from any level that you haven't explored yet.
             </div>
+
             <div class="levmeta">
                 <span>All levels</span>
                 <span>Pick a question →</span>
@@ -243,6 +267,7 @@ function renderLevels() {
     randomizer.onclick = startRandomizer;
 
     root.appendChild(randomizer);
+
 
     // OVERALL PROGRESS
     const exploredCount = allQuestions.filter(
@@ -257,8 +282,10 @@ function renderLevels() {
         : 0;
 
     $("percent").textContent = percent + "%";
+
     $("overallFill").style.width = percent + "%";
     $("overallFill").classList.remove("loading-bar");
+
 
     // UPDATE HOMEPAGE QUESTION COUNT
     const footnote = $("questionCount");
@@ -272,12 +299,16 @@ function renderLevels() {
 
 // START A LEVEL
 function start(n) {
+
     randomMode = false;
     level = n;
+
     deck = qs(n);
 
     // RESUME FROM FIRST UNEXPLORED QUESTION
-    idx = deck.findIndex(q => !explored.has(q.id));
+    idx = deck.findIndex(
+        q => !explored.has(q.id)
+    );
 
     // IF EVERYTHING IS EXPLORED, SHOW COMPLETION
     if (idx === -1) {
@@ -286,9 +317,10 @@ function start(n) {
 
     current = null;
 
+    closeSavedModal();
+
     $("intro").classList.add("hidden");
     $("game").classList.remove("hidden");
-    $("savedPanel").classList.add("hidden");
 
     show();
 }
@@ -296,13 +328,17 @@ function start(n) {
 
 // START RANDOMIZER WITH UNEXPLORED QUESTIONS FROM EVERY LEVEL
 function startRandomizer() {
+
     randomMode = true;
 
     // ONLY INCLUDE QUESTIONS THAT HAVE NOT BEEN MARKED EXPLORED
-    deck = allQuestions.filter(q => !explored.has(q.id));
+    deck = allQuestions.filter(
+        q => !explored.has(q.id)
+    );
 
     // SHUFFLE THE QUESTIONS INTO A RANDOM ORDER
     for (let i = deck.length - 1; i > 0; i--) {
+
         const j = Math.floor(Math.random() * (i + 1));
 
         [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -311,9 +347,10 @@ function startRandomizer() {
     idx = 0;
     current = null;
 
+    closeSavedModal();
+
     $("intro").classList.add("hidden");
     $("game").classList.remove("hidden");
-    $("savedPanel").classList.add("hidden");
 
     show();
 }
@@ -324,6 +361,7 @@ function show() {
 
     // CHECK IF LEVEL OR RANDOMIZER IS COMPLETE
     if (idx >= deck.length) {
+
         current = null;
 
         let completed = deck.filter(
@@ -352,7 +390,9 @@ function show() {
 
         $("progress").style.width =
             deck.length
-                ? (randomMode ? (idx + 1) / deck.length : completed / deck.length) * 100 + "%"
+                ? (randomMode
+                    ? (idx / deck.length)
+                    : (completed / deck.length)) * 100 + "%"
                 : "0%";
 
         $("levelProgress").textContent = randomMode
@@ -364,9 +404,13 @@ function show() {
         $("save").classList.add("hidden");
         $("interpretation").classList.add("hidden");
 
+        renderSaved();
+
         return;
     }
 
+
+    // GET CURRENT QUESTION
     current = deck[idx];
 
     // DISPLAY THE QUESTION'S CATEGORY IN RANDOMIZER MODE
@@ -384,6 +428,8 @@ function show() {
     $("number").textContent =
         String(idx + 1).padStart(2, "0");
 
+
+    // QUESTION LABELS
     let typeLabel = current.type !== "standard"
         ? ` · ${current.type.toUpperCase()}`
         : "";
@@ -402,6 +448,7 @@ function show() {
         ? `RANDOM PICK — LEVEL ${level}: ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`
         : `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`;
 
+
     // PROGRESS BASED ON ACTUALLY EXPLORED QUESTIONS OR RANDOM SESSION POSITION
     let completed = deck.filter(
         q => explored.has(q.id)
@@ -409,29 +456,41 @@ function show() {
 
     $("progress").style.width =
         deck.length
-            ? (randomMode ? (idx + 1) / deck.length : completed / deck.length) * 100 + "%"
+            ? (randomMode
+                ? (idx + 1) / deck.length
+                : completed / deck.length) * 100 + "%"
             : "0%";
 
     $("levelProgress").textContent = randomMode
         ? `${idx + 1} / ${deck.length} questions in this random session`
         : `${completed} / ${deck.length} explored in this level`;
 
+
+    // UPDATE SAVE BUTTON
     $("save").classList.remove("hidden");
 
     $("save").textContent =
         saved.has(current.id) ? "♥" : "♡";
 
+
+    // UPDATE NEXT BUTTON
     $("next").textContent =
         explored.has(current.id)
             ? "Next question →"
             : "Mark explored →";
 
+
+    // INTERPRETATION
     if (current.interpretation) {
+
         $("interpretation").textContent = current.interpretation;
         $("interpretation").classList.remove("hidden");
+
     } else {
+
         $("interpretation").classList.add("hidden");
     }
+
 
     renderSaved();
 }
@@ -439,58 +498,137 @@ function show() {
 
 // MOVE TO NEXT QUESTION
 function advance() {
+
     if (!current) {
+
         $("game").classList.add("hidden");
         $("intro").classList.remove("hidden");
+
         renderLevels();
+        renderSaved();
+
         return;
     }
 
     explored.add(current.id);
+
     saveProgress();
 
     idx++;
 
     // SKIP QUESTIONS THAT HAVE ALREADY BEEN ANSWERED
-    while (idx < deck.length && explored.has(deck[idx].id)) {
+    while (
+        idx < deck.length &&
+        explored.has(deck[idx].id)
+    ) {
         idx++;
     }
 
     show();
+
     renderLevels();
 }
 
 
-// DISPLAY SAVED QUESTIONS
+// DISPLAY SAVED QUESTIONS IN THE POPUP
 function renderSaved() {
+
+    // UPDATE SAVED QUESTION COUNTS
     $("savedCount").textContent = saved.size;
+    $("homeSavedCount").textContent = saved.size;
 
     let root = $("savedList");
     root.innerHTML = "";
 
+    // GET ALL SAVED QUESTIONS
     let list = allQuestions.filter(
         q => saved.has(q.id)
     );
 
+    // EMPTY STATE
     if (!list.length) {
+
         root.textContent =
             "No saved questions yet. Tap ♡ on a question to keep it here.";
+
         return;
     }
 
+    // DISPLAY EACH SAVED QUESTION
     list.forEach(q => {
+
         let d = document.createElement("div");
         d.className = "saveditem";
 
-        d.textContent =
-            `Level ${q.level}: ${q.text}`;
+        d.innerHTML = `
+            <div class="saveditem-info">
+                <small>LEVEL ${q.level} — ${escapeHTML(titleForLevel(q.level))}</small>
+                <p>${escapeHTML(q.text)}</p>
+            </div>
+
+            <button class="remove-saved" title="Remove saved question">
+                ♥
+            </button>
+        `;
+
+        // REMOVE SAVED QUESTION
+        d.querySelector(".remove-saved").onclick = () => {
+
+            saved.delete(q.id);
+
+            saveProgress();
+
+            renderSaved();
+
+            // UPDATE HEART ON CURRENT QUESTION IF NECESSARY
+            if (current && current.id === q.id) {
+                $("save").textContent = "♡";
+            }
+        };
 
         root.appendChild(d);
     });
 }
 
 
-// BUTTON EVENTS
+// OPEN SAVED QUESTIONS POPUP
+function openSavedModal() {
+
+    renderSaved();
+
+    $("savedModal").classList.remove("hidden");
+}
+
+
+// CLOSE SAVED QUESTIONS POPUP
+function closeSavedModal() {
+
+    $("savedModal").classList.add("hidden");
+}
+
+
+// SAVED QUESTIONS BUTTONS
+$("homeSavedToggle").onclick = openSavedModal;
+$("savedToggle").onclick = openSavedModal;
+
+
+// CLOSE BUTTON
+$("closeSavedModal").onclick = closeSavedModal;
+
+
+// CLOSE WHEN CLICKING OUTSIDE THE POPUP
+$("savedModal").querySelector(".saved-overlay").onclick =
+    closeSavedModal;
+
+
+// CLOSE POPUP WITH ESCAPE KEY
+document.addEventListener("keydown", e => {
+
+    if (e.key === "Escape") {
+        closeSavedModal();
+    }
+});
+
 
 // NEXT QUESTION
 $("next").onclick = advance;
@@ -498,6 +636,7 @@ $("next").onclick = advance;
 
 // PASS QUESTION
 $("pass").onclick = () => {
+
     if (!current) return;
 
     idx++;
@@ -505,7 +644,11 @@ $("pass").onclick = () => {
     // IN A REGULAR LEVEL, SKIP QUESTIONS ALREADY EXPLORED
     // RANDOMIZER QUESTIONS ARE ALREADY UNIQUE
     if (!randomMode) {
-        while (idx < deck.length && explored.has(deck[idx].id)) {
+
+        while (
+            idx < deck.length &&
+            explored.has(deck[idx].id)
+        ) {
             idx++;
         }
     }
@@ -516,21 +659,29 @@ $("pass").onclick = () => {
 
 // BACK TO LEVELS
 $("back").onclick = () => {
+
+    closeSavedModal();
+
     $("game").classList.add("hidden");
     $("intro").classList.remove("hidden");
 
     renderLevels();
+    renderSaved();
 };
 
 
 // HOME BUTTON
 $("home").onclick = e => {
+
     e.preventDefault();
+
+    closeSavedModal();
 
     $("game").classList.add("hidden");
     $("intro").classList.remove("hidden");
 
     renderLevels();
+    renderSaved();
 };
 
 
@@ -548,6 +699,8 @@ $("reset").onclick = () => {
         $("game").classList.add("hidden");
         $("intro").classList.remove("hidden");
 
+        closeSavedModal();
+
         renderLevels();
         renderSaved();
     }
@@ -560,8 +713,11 @@ $("save").onclick = () => {
     if (!current) return;
 
     if (saved.has(current.id)) {
+
         saved.delete(current.id);
+
     } else {
+
         saved.add(current.id);
     }
 
@@ -569,12 +725,6 @@ $("save").onclick = () => {
     saveProgress();
 
     show();
-};
-
-
-// TOGGLE SAVED QUESTIONS PANEL
-$("savedToggle").onclick = () => {
-    $("savedPanel").classList.toggle("hidden");
 };
 
 
