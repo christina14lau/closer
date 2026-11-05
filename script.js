@@ -1,4 +1,3 @@
-
 const TITLES = [
     "First Impressions",
     "Values & Worldviews",
@@ -69,6 +68,7 @@ let idx = 0;
 let explored = loadStoredSet("explored");
 let saved = loadStoredSet("saved");
 let current = null;
+let randomMode = false;
 
 
 // SAVE PROGRESS TO LOCAL STORAGE
@@ -137,6 +137,21 @@ async function loadQuestions() {
         console.log("Explored questions:", explored.size);
         console.log("Saved questions:", saved.size);
 
+
+        // CHECK FOR DUPLICATE QUESTION IDs
+        const seen = new Map();
+
+        allQuestions.forEach(q => {
+            if (seen.has(q.id)) {
+                console.log("Duplicate ID:", q.id);
+                console.log("First question:", seen.get(q.id));
+                console.log("Duplicate question:", q.text);
+            } else {
+                seen.set(q.id, q.text);
+            }
+        });
+
+
         renderLevels();
         renderSaved();
 
@@ -165,11 +180,13 @@ function titleForLevel(n) {
 }
 
 
+
 // DISPLAY LEVELS
 function renderLevels() {
     let root = $("levels");
     root.innerHTML = "";
 
+    // CREATE ALL LEVEL CARDS
     TITLES.forEach((title, i) => {
         let n = i + 1;
         let list = qs(n);
@@ -199,10 +216,33 @@ function renderLevels() {
         // DISABLE LEVELS WITHOUT QUESTIONS
         el.disabled = list.length === 0;
 
+        // OPEN SELECTED LEVEL
         el.onclick = () => start(n);
 
         root.appendChild(el);
     });
+
+    // CREATE RANDOMIZER CARD AFTER ALL LEVELS
+    let randomizer = document.createElement("button");
+    randomizer.className = "level randomizer";
+
+    randomizer.innerHTML = `
+        <span class="badge">♡</span>
+        <span class="levcontent">
+            <div class="levtitle">Surprise Me</div>
+            <div class="levdesc">
+                Get a random question from any level that you haven't explored yet.
+            </div>
+            <div class="levmeta">
+                <span>All levels</span>
+                <span>Pick a question →</span>
+            </div>
+        </span>
+    `;
+
+    randomizer.onclick = startRandomizer;
+
+    root.appendChild(randomizer);
 
     // OVERALL PROGRESS
     const exploredCount = allQuestions.filter(
@@ -232,6 +272,7 @@ function renderLevels() {
 
 // START A LEVEL
 function start(n) {
+    randomMode = false;
     level = n;
     deck = qs(n);
 
@@ -253,10 +294,35 @@ function start(n) {
 }
 
 
+// START RANDOMIZER WITH UNEXPLORED QUESTIONS FROM EVERY LEVEL
+function startRandomizer() {
+    randomMode = true;
+
+    // ONLY INCLUDE QUESTIONS THAT HAVE NOT BEEN MARKED EXPLORED
+    deck = allQuestions.filter(q => !explored.has(q.id));
+
+    // SHUFFLE THE QUESTIONS INTO A RANDOM ORDER
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    idx = 0;
+    current = null;
+
+    $("intro").classList.add("hidden");
+    $("game").classList.remove("hidden");
+    $("savedPanel").classList.add("hidden");
+
+    show();
+}
+
+
 // DISPLAY CURRENT QUESTION
 function show() {
 
-    // CHECK IF LEVEL IS COMPLETE
+    // CHECK IF LEVEL OR RANDOMIZER IS COMPLETE
     if (idx >= deck.length) {
         current = null;
 
@@ -264,28 +330,34 @@ function show() {
             q => explored.has(q.id)
         ).length;
 
-        $("question").textContent =
-            completed === deck.length
+        $("question").textContent = randomMode
+            ? "You've reached the end of this random session!"
+            : (completed === deck.length
                 ? "You've explored every question in this level."
-                : "You've reached the end of this level.";
+                : "You've reached the end of this level.");
 
-        $("hint").textContent =
-            "Return to all levels to choose another deck or revisit saved questions.";
+        $("hint").textContent = randomMode
+            ? "Return to all levels or start the randomizer again. Any questions you passed will still be available."
+            : "Return to all levels to choose another deck or revisit saved questions.";
 
         $("number").textContent = "♡";
 
-        $("pill").textContent =
-            `LEVEL ${level} COMPLETE`;
+        $("pill").textContent = randomMode
+            ? "RANDOMIZER COMPLETE"
+            : `LEVEL ${level} COMPLETE`;
 
-        $("round").textContent = "LEVEL COMPLETE";
+        $("round").textContent = randomMode
+            ? "RANDOMIZER COMPLETE"
+            : "LEVEL COMPLETE";
 
         $("progress").style.width =
             deck.length
-                ? completed / deck.length * 100 + "%"
+                ? (randomMode ? (idx + 1) / deck.length : completed / deck.length) * 100 + "%"
                 : "0%";
 
-        $("levelProgress").textContent =
-            `${completed} / ${deck.length} explored in this level`;
+        $("levelProgress").textContent = randomMode
+            ? `${completed} / ${deck.length} explored in this random session`
+            : `${completed} / ${deck.length} explored in this level`;
 
         $("next").textContent = "Back to levels ↗";
 
@@ -296,6 +368,11 @@ function show() {
     }
 
     current = deck[idx];
+
+    // DISPLAY THE QUESTION'S CATEGORY IN RANDOMIZER MODE
+    if (randomMode) {
+        level = current.level;
+    }
 
     $("question").textContent = current.text;
 
@@ -313,28 +390,31 @@ function show() {
 
     let adultLabel = level === 9 ? " · 18+" : "";
 
-    $("round").textContent =
-        `LEVEL ${level}${typeLabel}${adultLabel} · QUESTION ${String(idx + 1).padStart(2, "0")}`;
+    $("round").textContent = randomMode
+        ? `RANDOMIZER · QUESTION ${String(idx + 1).padStart(2, "0")} OF ${deck.length}`
+        : `LEVEL ${level}${typeLabel}${adultLabel} · QUESTION ${String(idx + 1).padStart(2, "0")}`;
 
     let sectionLabel = current.section
         ? ` · ${current.section}`
         : "";
 
-    $("pill").textContent =
-        `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`;
+    $("pill").textContent = randomMode
+        ? `RANDOM PICK — LEVEL ${level}: ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`
+        : `LEVEL ${level} — ${titleForLevel(level).toUpperCase()}${sectionLabel}${adultLabel}`;
 
-    // PROGRESS BASED ON ACTUALLY EXPLORED QUESTIONS
+    // PROGRESS BASED ON ACTUALLY EXPLORED QUESTIONS OR RANDOM SESSION POSITION
     let completed = deck.filter(
         q => explored.has(q.id)
     ).length;
 
     $("progress").style.width =
         deck.length
-            ? completed / deck.length * 100 + "%"
+            ? (randomMode ? (idx + 1) / deck.length : completed / deck.length) * 100 + "%"
             : "0%";
 
-    $("levelProgress").textContent =
-        `${completed} / ${deck.length} explored in this level`;
+    $("levelProgress").textContent = randomMode
+        ? `${idx + 1} / ${deck.length} questions in this random session`
+        : `${completed} / ${deck.length} explored in this level`;
 
     $("save").classList.remove("hidden");
 
@@ -359,14 +439,19 @@ function show() {
 
 // MOVE TO NEXT QUESTION
 function advance() {
-    if (current) {
-        explored.add(current.id);
-        saveProgress();
+    if (!current) {
+        $("game").classList.add("hidden");
+        $("intro").classList.remove("hidden");
+        renderLevels();
+        return;
     }
+
+    explored.add(current.id);
+    saveProgress();
 
     idx++;
 
-    // Skip questions that have already been answered
+    // SKIP QUESTIONS THAT HAVE ALREADY BEEN ANSWERED
     while (idx < deck.length && explored.has(deck[idx].id)) {
         idx++;
     }
@@ -413,7 +498,18 @@ $("next").onclick = advance;
 
 // PASS QUESTION
 $("pass").onclick = () => {
+    if (!current) return;
+
     idx++;
+
+    // IN A REGULAR LEVEL, SKIP QUESTIONS ALREADY EXPLORED
+    // RANDOMIZER QUESTIONS ARE ALREADY UNIQUE
+    if (!randomMode) {
+        while (idx < deck.length && explored.has(deck[idx].id)) {
+            idx++;
+        }
+    }
+
     show();
 };
 
