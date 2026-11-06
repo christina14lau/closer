@@ -60,6 +60,34 @@ function loadStoredSet(key) {
 }
 
 
+// LOAD SAVED UNDO HISTORY FROM LOCAL STORAGE
+function loadUndoHistory() {
+    try {
+        const data = JSON.parse(
+            localStorage.getItem(STORAGE_KEY) || "{}"
+        );
+
+        if (!Array.isArray(data.undoHistory)) {
+            return [];
+        }
+
+        return data.undoHistory.map(action => ({
+            ...action,
+
+            // GIVE OLD ACTIONS A SESSION KEY
+            sessionKey: action.sessionKey ||
+                (action.randomMode
+                    ? `randomizer-${action.sessionId || "legacy"}`
+                    : `level-${action.level}`)
+        }));
+
+    } catch (error) {
+        console.error("Unable to load undo history:", error);
+        return [];
+    }
+}
+
+
 // GLOBAL VARIABLES
 let allQuestions = [];
 let level = 1;
@@ -70,20 +98,132 @@ let saved = loadStoredSet("saved");
 let current = null;
 let randomMode = false;
 
+// UNDO HISTORY AND SESSION TRACKING
+let undoHistory = loadUndoHistory();
+let activeSessionKey = null;
+let inGame = false;
+
 
 // SAVE PROGRESS TO LOCAL STORAGE
 function saveProgress() {
     try {
+
         localStorage.setItem(
             STORAGE_KEY,
             JSON.stringify({
                 explored: [...explored],
-                saved: [...saved]
+                saved: [...saved],
+
+                // SAVE ALL UNDO HISTORY
+                undoHistory: undoHistory,
+
+                // SAVE CURRENT GAME SESSION FOR REFRESHING
+                activeSession: inGame
+                    ? {
+                        sessionKey: activeSessionKey,
+                        deckIds: deck.map(q => q.id),
+                        index: idx,
+                        level: level,
+                        randomMode: randomMode
+                    }
+                    : null
             })
         );
 
     } catch (error) {
         console.error("Unable to save progress:", error);
+    }
+}
+
+
+// START A SESSION
+function startNewSession(newSessionKey) {
+
+    // IDENTIFY WHICH LEVEL OR SESSION IS CURRENTLY ACTIVE
+    activeSessionKey = newSessionKey;
+
+    inGame = true;
+
+    saveProgress();
+}
+
+
+// END THE CURRENT SESSION
+function endSession() {
+
+    // MARK THAT THE USER HAS LEFT THE GAME
+    inGame = false;
+
+    // KEEP ALL UNDO HISTORY SAVED
+    current = null;
+    activeSessionKey = null;
+
+    saveProgress();
+}
+
+
+// RESTORE THE PREVIOUS SESSION AFTER REFRESHING
+function restoreSession() {
+
+    try {
+
+        const data = JSON.parse(
+            localStorage.getItem(STORAGE_KEY) || "{}"
+        );
+
+        const previousSession = data.activeSession;
+
+        // CHECK IF THERE IS A SAVED SESSION
+        if (
+            !previousSession ||
+            !Array.isArray(previousSession.deckIds)
+        ) {
+            return false;
+        }
+
+        // RESTORE THE SESSION KEY
+        activeSessionKey = previousSession.sessionKey ||
+            (previousSession.randomMode
+                ? `randomizer-${previousSession.sessionId || "legacy"}`
+                : `level-${previousSession.level}`);
+
+        // RESTORE THE ORIGINAL QUESTION DECK
+        deck = previousSession.deckIds
+            .map(id => allQuestions.find(q => q.id === id))
+            .filter(q => q !== undefined);
+
+        // DO NOT RESTORE AN EMPTY OR INVALID DECK
+        if (deck.length === 0) {
+            return false;
+        }
+
+        level = previousSession.level;
+        randomMode = previousSession.randomMode;
+
+        // RESTORE THE QUESTION POSITION
+        idx = Math.max(
+            0,
+            Math.min(previousSession.index, deck.length)
+        );
+
+        current = null;
+        inGame = true;
+
+        // RESTORE THE GAME SCREEN
+        $("intro").classList.add("hidden");
+        $("game").classList.remove("hidden");
+
+        show();
+
+        console.log("Previous session restored.");
+
+        return true;
+
+    } catch (error) {
+
+        console.error("Unable to restore previous session:", error);
+
+        return false;
     }
 }
 
@@ -130,11 +270,15 @@ async function loadQuestions() {
             [...saved].filter(id => validIds.has(id))
         );
 
-        saveProgress();
+        // REMOVE INVALID QUESTIONS FROM UNDO HISTORY
+        undoHistory = undoHistory.filter(
+            action => validIds.has(action.questionId)
+        );
 
         console.log("Questions loaded:", allQuestions.length);
         console.log("Explored questions:", explored.size);
         console.log("Saved questions:", saved.size);
+        console.log("Undo history:", undoHistory.length);
 
 
         // CHECK FOR DUPLICATE QUESTION IDs
@@ -151,9 +295,20 @@ async function loadQuestions() {
         });
 
 
+        // RESTORE THE PREVIOUS SESSION IF AVAILABLE
+        const restored = restoreSession();
+
+        // SAVE CLEANED PROGRESS
+        saveProgress();
+
         // RENDER PAGE
         renderLevels();
         renderSaved();
+
+        if (!restored) {
+            $("game").classList.add("hidden");
+            $("intro").classList.remove("hidden");
+        }
 
     } catch (error) {
         console.error("Error loading questions:", error);
@@ -300,6 +455,9 @@ function renderLevels() {
 // START A LEVEL
 function start(n) {
 
+    // REUSE THE SAME UNDO HISTORY FOR THIS LEVEL
+    startNewSession(`level-${n}`);
+
     randomMode = false;
     level = n;
 
@@ -328,6 +486,9 @@ function start(n) {
 
 // START RANDOMIZER WITH UNEXPLORED QUESTIONS FROM EVERY LEVEL
 function startRandomizer() {
+
+    // GIVE EACH RANDOMIZER RUN ITS OWN HISTORY
+    startNewSession(`randomizer-${Date.now()}`);
 
     randomMode = true;
 
@@ -358,6 +519,18 @@ function startRandomizer() {
 
 // DISPLAY CURRENT QUESTION
 function show() {
+
+    // UPDATE UNDO BUTTON
+    const undoButton = $("undo");
+
+    if (undoButton) {
+
+        // ONLY ENABLE UNDO IF THE CURRENT SESSION HAS HISTORY
+        undoButton.disabled = !undoHistory.some(
+            action => action.sessionKey === activeSessionKey
+        );
+    }
+
 
     // CHECK IF LEVEL OR RANDOMIZER IS COMPLETE
     if (idx >= deck.length) {
@@ -405,6 +578,9 @@ function show() {
         $("interpretation").classList.add("hidden");
 
         renderSaved();
+
+        // SAVE THE CURRENT SESSION POSITION
+        saveProgress();
 
         return;
     }
@@ -493,6 +669,38 @@ function show() {
 
 
     renderSaved();
+
+    // SAVE THE CURRENT SESSION POSITION
+    saveProgress();
+}
+
+
+// RECORD QUESTION ACTIONS FOR UNDO
+function recordUndo(action) {
+
+    if (!current) return;
+
+    undoHistory.push({
+        questionId: current.id,
+        action: action,
+        wasExplored: explored.has(current.id),
+
+        // REMEMBER THE ORIGINAL QUESTION DECK
+        deckIds: deck.map(q => q.id),
+        index: idx,
+        level: level,
+        randomMode: randomMode,
+
+        // IDENTIFY WHICH LEVEL OR SESSION THIS ACTION BELONGS TO
+        sessionKey: activeSessionKey
+    });
+
+    // LIMIT HISTORY TO PREVENT UNLIMITED STORAGE GROWTH
+    if (undoHistory.length > 100) {
+        undoHistory.shift();
+    }
+
+    saveProgress();
 }
 
 
@@ -500,6 +708,9 @@ function show() {
 function advance() {
 
     if (!current) {
+
+        // LEAVE THE CURRENT SESSION
+        endSession();
 
         $("game").classList.add("hidden");
         $("intro").classList.remove("hidden");
@@ -510,6 +721,10 @@ function advance() {
         return;
     }
 
+    // RECORD THE ACTION BEFORE CHANGING PROGRESS
+    recordUndo("completed");
+
+    // MARK QUESTION AS EXPLORED
     explored.add(current.id);
 
     saveProgress();
@@ -524,6 +739,65 @@ function advance() {
         idx++;
     }
 
+    show();
+
+    renderLevels();
+}
+
+
+// UNDO THE MOST RECENT QUESTION ACTION IN THE CURRENT SESSION
+function undo() {
+
+    // ONLY FIND ACTIONS FROM THE CURRENT SESSION
+    let historyIndex = undoHistory.length - 1;
+
+    while (
+        historyIndex >= 0 &&
+        undoHistory[historyIndex].sessionKey !== activeSessionKey
+    ) {
+        historyIndex--;
+    }
+
+    // NOTHING TO UNDO IN THIS SESSION
+    if (historyIndex === -1) return;
+
+    // GET THE MOST RECENT ACTION
+    const lastAction = undoHistory.splice(historyIndex, 1)[0];
+
+    // RESTORE THE ORIGINAL QUESTION DECK
+    deck = lastAction.deckIds
+        .map(id => allQuestions.find(q => q.id === id))
+        .filter(q => q !== undefined);
+
+    level = lastAction.level;
+    randomMode = lastAction.randomMode;
+
+    // RESTORE THE QUESTION POSITION
+    idx = deck.findIndex(
+        q => q.id === lastAction.questionId
+    );
+
+    // IF THE QUESTION NO LONGER EXISTS, STOP
+    if (idx === -1) {
+        saveProgress();
+        show();
+        return;
+    }
+
+    // REVERSE COMPLETION IF NECESSARY
+    if (
+        lastAction.action === "completed" &&
+        !lastAction.wasExplored
+    ) {
+        explored.delete(lastAction.questionId);
+    }
+
+    // SAVE THE REVERSED PROGRESS AND UPDATED HISTORY
+    current = null;
+
+    saveProgress();
+
+    // RETURN TO THE QUESTION THAT WAS UNDONE
     show();
 
     renderLevels();
@@ -634,10 +908,17 @@ document.addEventListener("keydown", e => {
 $("next").onclick = advance;
 
 
+// UNDO QUESTION
+$("undo").onclick = undo;
+
+
 // PASS QUESTION
 $("pass").onclick = () => {
 
     if (!current) return;
+
+    // RECORD THE SKIPPED QUESTION
+    recordUndo("skipped");
 
     idx++;
 
@@ -660,6 +941,9 @@ $("pass").onclick = () => {
 // BACK TO LEVELS
 $("back").onclick = () => {
 
+    // END THE CURRENT SESSION
+    endSession();
+
     closeSavedModal();
 
     $("game").classList.add("hidden");
@@ -674,6 +958,9 @@ $("back").onclick = () => {
 $("home").onclick = e => {
 
     e.preventDefault();
+
+    // END THE CURRENT SESSION
+    endSession();
 
     closeSavedModal();
 
@@ -692,6 +979,12 @@ $("reset").onclick = () => {
 
         explored.clear();
         saved.clear();
+        undoHistory = [];
+
+        // END THE CURRENT SESSION
+        inGame = false;
+        current = null;
+        activeSessionKey = null;
 
         // CLEAR LOCAL STORAGE DATA
         saveProgress();
